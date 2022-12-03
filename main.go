@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -31,21 +32,51 @@ var (
 )
 
 func main() {
+	height := getLatestBlock(rpcAddr)
+	log.Info().Str("module", "miss").Msgf("Start height: %v", height)
+
 	for {
-		err := getMissBlock(rpcAddr)
+		err := checkMissed(rpcAddr, height)
 		if err != nil {
 			fmt.Sprintln(err)
 		}
-		log.Info().Str("module", "miss").Msgf("Current miss blocks: %v", missBlocks)
+		log.Info().Str("module", "miss").Msgf("This checked height: %v, Total miss blocks: %v", height, missBlocks)
 		time.Sleep(7 * time.Second)
+
+		height++
 	}
 }
 
-func getMissBlock(rpc string) error {
+func getLatestBlock(rpc string) int {
+	var r Response
+	queryURL := rpc + "/blocks/latest"
+	client := &http.Client{}
+
+	req, err := http.NewRequest("GET", queryURL, nil)
+	if err != nil {
+		fmt.Sprintln(err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Sprintln(err)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Sprintln(err)
+	}
+	json.Unmarshal(body, &r)
+
+	latestHeight, _ := strconv.Atoi(r.Block.LastCommit.Height)
+
+	return latestHeight
+}
+
+func checkMissed(rpc string, startBlock int) error {
 	var returnData Response
 
 	isMissed := true
-	queryURL := rpc + "/blocks/latest"
+	queryURL := rpc + "/blocks/" + strconv.Itoa(startBlock)
 
 	client := &http.Client{}
 
